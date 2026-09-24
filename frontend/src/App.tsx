@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Play, Database, Key, LayoutTemplate, CheckCircle2, XCircle, Loader2, Plus, Minus, BrainCircuit, Download, BarChart2 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || '/api';
 
 const OPENROUTER_MODELS: Record<string, string> = {
    "Google Gemma 3 27B IT": "google/gemma-3-27b-it:free",
@@ -717,10 +717,17 @@ export default function App() {
                                                 const success_rate = ((n_examples - n_errors) / Math.max(n_examples, 1)) * 100;
 
                                                 let primaryScoreStr = "N/A";
-                                                if (scores.accuracy !== undefined) primaryScoreStr = `Accuracy: ${scores.accuracy.toFixed(3)}`;
-                                                else if (scores.rouge1 !== undefined) primaryScoreStr = `ROUGE-1: ${scores.rouge1.toFixed(3)}`;
-                                                else if (scores.ROUGE !== undefined) primaryScoreStr = `ROUGE-L: ${scores.ROUGE.toFixed(3)}`;
-                                                else if (scores.EM !== undefined) primaryScoreStr = `EM: ${scores.EM.toFixed(3)}`;
+                                                const acc = scores.Accuracy ?? scores.accuracy;
+                                                const r1 = scores.ROUGE1 ?? scores.rouge1;
+                                                const rl = scores.ROUGEL ?? scores.rougeL ?? scores.ROUGE ?? scores.rouge;
+                                                const em = scores.EM ?? scores.em;
+                                                const f1 = scores.F1 ?? scores.f1;
+
+                                                if (acc !== undefined && typeof acc === 'number') primaryScoreStr = `Accuracy: ${acc.toFixed(3)}`;
+                                                else if (r1 !== undefined && typeof r1 === 'number') primaryScoreStr = `ROUGE-1: ${r1.toFixed(3)}`;
+                                                else if (rl !== undefined && typeof rl === 'number') primaryScoreStr = `ROUGE-L: ${rl.toFixed(3)}`;
+                                                else if (em !== undefined && typeof em === 'number') primaryScoreStr = `EM: ${em.toFixed(3)}`;
+                                                else if (f1 !== undefined && typeof f1 === 'number') primaryScoreStr = `F1: ${f1.toFixed(3)}`;
 
                                                 return (
                                                    <tr key={model} className="hover:bg-[#1f2937]/40 transition-colors">
