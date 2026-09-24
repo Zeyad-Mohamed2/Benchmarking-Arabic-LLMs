@@ -10,6 +10,8 @@ ARABIC_DIACRITICS = re.compile(r"[\u0617-\u061A\u064B-\u0652]")
 
 
 def normalize_arabic(text: str) -> str:
+    if text is None:
+        return ""
     text = str(text)
 
     text = re.sub(ARABIC_DIACRITICS, "", text)
