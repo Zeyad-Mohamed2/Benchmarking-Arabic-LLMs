@@ -64,8 +64,10 @@ def _test_groq_connection(api_key: str, model_name: str) -> tuple[bool, str]:
 @router.post("/test-connection")
 def test_connection(request: ConnectionTestRequest):
     """Test API connection for given provider and models."""
-    if not request.api_key:raise HTTPException(status_code=400, detail="API key is required")
-    if not request.models:raise HTTPException(status_code=400, detail="At least one model must be selected")
+    if not request.api_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+    if not request.models:
+        raise HTTPException(status_code=400, detail="At least one model must be selected")
     
     results = {}
     all_success = True
@@ -123,14 +125,17 @@ async def run_benchmark_endpoint(
 
     dataset_content = None
     if dataset:
-        dataset_content = dataset # The orchestrator has a stream load strategy
-        # We might need a wrapper around UploadFile to mock Streamlit's UploadedFile.
-        class UploadedFileMock:
-            def __init__(self, file: UploadFile):
-                self.name = file.filename
-                self.file = file.file
+        import io
+
+        class UploadedFileMock(io.BytesIO):
+            def __init__(self, upload_file: UploadFile):
+                content = upload_file.file.read()
+                super().__init__(content)
+                self.name = upload_file.filename or "uploaded_dataset.csv"
+
             def getvalue(self):
-                return self.file.read()
+                return super().getvalue()
+
         dataset_content = UploadedFileMock(dataset)
 
     # Run orchestrator in a background thread to not block the main thread.
@@ -189,35 +194,34 @@ async def get_progress(run_id: str):
                 import json
                 yield {"event": "progress", "data": json.dumps(msg)}
         finally:
-            if run_id in benchmark_progress_queues:
-                # Cleanup to avoid memory leak eventually
-                pass
+            benchmark_progress_queues.pop(run_id, None)
 
     return EventSourceResponse(event_generator())
 
 @router.get("/download")
 async def download_file(file_path: str):
     """Download a file by its absolute path."""
-    import os
-    
+    from pathlib import Path
+
     if not file_path:
         raise HTTPException(status_code=400, detail="File path is required")
         
-    # Validate the file exists
-    if not os.path.exists(file_path):
+    target_path = Path(file_path).resolve()
+    if not target_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
         
     # Ensure it's inside allowed directories
-    abs_path = os.path.abspath(file_path)
-    allowed_dirs = [os.path.abspath(str(LOGS_DIR)), os.path.abspath(str(EXCEL_DIR))]
-    
-    is_allowed = any(abs_path.startswith(d) for d in allowed_dirs)
+    allowed_dirs = [LOGS_DIR.resolve(), EXCEL_DIR.resolve()]
+    is_allowed = any(
+        target_path == d or target_path.is_relative_to(d)
+        for d in allowed_dirs
+    )
     if not is_allowed:
         raise HTTPException(status_code=403, detail="Access to this path is forbidden")
         
     return FileResponse(
-        path=abs_path, 
-        filename=os.path.basename(abs_path),
+        path=str(target_path), 
+        filename=target_path.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 

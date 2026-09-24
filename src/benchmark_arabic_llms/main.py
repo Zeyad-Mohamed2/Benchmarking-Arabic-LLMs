@@ -85,7 +85,7 @@ def main():
         default="ui",
         help="Run mode: 'api' for FastAPI backend, 'ui' for Streamlit frontend"
     )
-    parser.add_argument("--port", type=int, default=8081, help="Port to run API on (if in api mode)")
+    parser.add_argument("--port", type=int, default=8000, help="Port to run API on (if in api mode)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to run API on (if in api mode)")
 
     args = parser.parse_args()
