@@ -137,16 +137,19 @@ Notes on interpretation
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Node.js & npm (for the React Frontend)
 - Poetry (for dependency management)
 - Required Python packages (installed automatically via Poetry):
   - fastapi
   - uvicorn
   - streamlit
-  - evaluate
   - rouge-score
   - scikit-learn
+  - sacrebleu
+  - bert-score
+  - nltk
+  - torch
   - python-dotenv
   - openpyxl
   - pandas
@@ -155,7 +158,7 @@ Notes on interpretation
 ## Setup And Usage
 
 ### 1. Installation
-First, install the Python backend dependencies using Poetry, and then install the Node.js frontend dependencies:
+Install the Python backend dependencies using Poetry, and then install the Node.js frontend dependencies:
 
 ```bash
 # Install Python dependencies
@@ -168,7 +171,12 @@ cd ..
 ```
 
 ### 2. Environment Variables
-Create a `.env` file in the root directory based on `.env.example` (if it exists) and add your keys:
+Create a `.env` file in the root directory based on `.env.example`:
+
+```bash
+cp .env.example .env
+```
+And add your provider API keys:
 
 ```
 OPENROUTER_API_KEY=your_openrouter_api_key_here
@@ -191,29 +199,10 @@ If you prefer to run the legacy Streamlit interface, you can still trigger it na
 poetry run python src/benchmark_arabic_llms/main.py --mode ui
 ```
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd benchmark-arabic-llms
-```
-
-2. Install dependencies:
-```bash
-poetry install
-```
-
-## Usage Guide
-
-### Starting the Application
-
-1. Launch the benchmarking application:
-```bash
-poetry run streamlit run src/benchmark_arabic_llms/main.py
-```
-
-### Interface Overview
+## Interface Overview
 
 The application provides a web interface with the following sections:
+
 
 #### 1. Sidebar Configuration
 - **Task Selection**:
