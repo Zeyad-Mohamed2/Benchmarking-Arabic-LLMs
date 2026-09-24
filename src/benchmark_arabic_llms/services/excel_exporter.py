@@ -292,13 +292,14 @@ class ExcelExporter:
     def _flatten_summarization_scores(
         self, scores: Dict[str, Any], flattened: Dict[str, Any]
     ) -> None:
-        """Flatten summarization scores (ROUGE, BLEU, METEOR)."""
+        """Flatten summarization scores (ROUGE, BLEU, METEOR, BERTScore)."""
         flattened.update(
             {
-                "rouge1": scores.get("rouge1", 0.0),
-                "rougeL": scores.get("rougeL", 0.0),
-                "bleu": scores.get("bleu", 0.0),
-                "meteor": scores.get("meteor", 0.0),
+                "rouge1": scores.get("ROUGE1", scores.get("rouge1", 0.0)),
+                "rougeL": scores.get("ROUGEL", scores.get("rougeL", 0.0)),
+                "bleu": scores.get("BLEU", scores.get("bleu", 0.0)),
+                "meteor": scores.get("METEOR", scores.get("meteor", 0.0)),
+                "bert_score": scores.get("BERTScore", scores.get("bert_score", 0.0)),
             }
         )
 
@@ -308,10 +309,14 @@ class ExcelExporter:
         """Flatten QA scores."""
         flattened.update(
             {
-                "accuracy": scores.get("accuracy", scores.get("EM", 0.0)),
-                "f1": scores.get("f1", 0.0),
-                "em": scores.get("EM", scores.get("accuracy", 0.0)),
-                "rouge": scores.get("ROUGE", 0.0),
+                "accuracy": scores.get("Accuracy", scores.get("accuracy", scores.get("EM", scores.get("em", 0.0)))),
+                "em": scores.get("EM", scores.get("em", scores.get("Accuracy", scores.get("accuracy", 0.0)))),
+                "f1": scores.get("F1", scores.get("f1", 0.0)),
+                "rouge1": scores.get("ROUGE1", scores.get("rouge1", 0.0)),
+                "rougeL": scores.get("ROUGEL", scores.get("rougeL", scores.get("ROUGE", scores.get("rouge", 0.0)))),
+                "bleu": scores.get("BLEU", scores.get("bleu", 0.0)),
+                "meteor": scores.get("METEOR", scores.get("meteor", 0.0)),
+                "bert_score": scores.get("BERTScore", scores.get("bert_score", 0.0)),
             }
         )
 
@@ -321,10 +326,11 @@ class ExcelExporter:
         """Flatten sarcasm detection scores."""
         flattened.update(
             {
-                "accuracy": scores.get("accuracy", 0.0),
-                "roc_auc": scores.get("roc_auc", 0.0),
-                "recall": scores.get("recall", 0.0),
-                "f1": scores.get("f1", 0.0),
+                "accuracy": scores.get("Accuracy", scores.get("accuracy", 0.0)),
+                "f1": scores.get("F1", scores.get("f1", 0.0)),
+                "precision": scores.get("Precision", scores.get("precision", 0.0)),
+                "recall": scores.get("Recall", scores.get("recall", 0.0)),
+                "roc_auc": scores.get("ROC_AUC", scores.get("roc_auc", 0.0)),
             }
         )
 
@@ -403,30 +409,37 @@ class ExcelExporter:
                 if case == "summarization":
                     row.update(
                         {
-                            "ROUGE1": scores.get("rouge1", "N/A"),
-                            "ROUGEL": scores.get("rougeL", "N/A"),
-                            "BLEU": scores.get("bleu", "N/A"),
-                            "METEOR": scores.get("meteor", "N/A"),
+                            "ROUGE1": scores.get("ROUGE1", scores.get("rouge1", "N/A")),
+                            "ROUGEL": scores.get("ROUGEL", scores.get("rougeL", "N/A")),
+                            "BLEU": scores.get("BLEU", scores.get("bleu", "N/A")),
+                            "METEOR": scores.get("METEOR", scores.get("meteor", "N/A")),
+                            "BERTScore": scores.get("BERTScore", scores.get("bert_score", "N/A")),
                         }
                     )
                 elif case == "question_answering":
                     row.update(
                         {
-                            "Accuracy": scores.get("accuracy", scores.get("EM", "N/A")),
-                            "F1": scores.get("f1", "N/A"),
-                            "EM": scores.get("EM", scores.get("accuracy", "N/A")),
-                            "ROUGE": scores.get("ROUGE", "N/A"),
+                            "Accuracy": scores.get("Accuracy", scores.get("accuracy", scores.get("EM", "N/A"))),
+                            "EM": scores.get("EM", scores.get("em", scores.get("Accuracy", "N/A"))),
+                            "F1": scores.get("F1", scores.get("f1", "N/A")),
+                            "ROUGE1": scores.get("ROUGE1", scores.get("rouge1", "N/A")),
+                            "ROUGEL": scores.get("ROUGEL", scores.get("rougeL", scores.get("ROUGE", "N/A"))),
+                            "BLEU": scores.get("BLEU", scores.get("bleu", "N/A")),
+                            "METEOR": scores.get("METEOR", scores.get("meteor", "N/A")),
+                            "BERTScore": scores.get("BERTScore", scores.get("bert_score", "N/A")),
                         }
                     )
                 elif case == "sarcasm":
                     row.update(
                         {
-                            "Accuracy": scores.get("accuracy", "N/A"),
-                            "ROC_AUC": scores.get("roc_auc", "N/A"),
-                            "Recall": scores.get("recall", "N/A"),
-                            "F1": scores.get("f1", "N/A"),
+                            "Accuracy": scores.get("Accuracy", scores.get("accuracy", "N/A")),
+                            "F1": scores.get("F1", scores.get("f1", "N/A")),
+                            "Precision": scores.get("Precision", scores.get("precision", "N/A")),
+                            "Recall": scores.get("Recall", scores.get("recall", "N/A")),
+                            "ROC_AUC": scores.get("ROC_AUC", scores.get("roc_auc", "N/A")),
                         }
                     )
+
 
                 # Add semantic matching stats if available
                 if stats.get("semantic_matching_enabled", False):

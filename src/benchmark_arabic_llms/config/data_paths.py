@@ -12,12 +12,8 @@ LOGS_DIR = ROOT_PATH / "logs"
 
 # Dataset paths
 SUMMARIZATION_DATA_CSV = DATA_DIR / "summarization_sample.csv"
-TEMP_SUMMARIZATION_DATA_CSV = DATA_DIR / "temp_summarization_sample.csv"
 QA_DATA_CSV = DATA_DIR / "qa_sample.csv"
-SADEEM_ARABIC_QA_CSV = DATA_DIR / "sadeem_arabic_qa.csv"
-TEMP_QA_DATA_CSV = DATA_DIR / "temp_qa_sample.csv"
 SARCASM_DATA_CSV = DATA_DIR / "sarcasm_sample.csv"
-TEMP_SARCASM_DATA_CSV = DATA_DIR / "temp_sarcasm_sample.csv"
 
 # Prompt template paths
 SUMMARIZATION_PROMPT = PROMPTS_DIR / "summarization.prompt.md"

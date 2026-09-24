@@ -14,9 +14,6 @@ from benchmark_arabic_llms.config.data_paths import (
     SUMMARIZATION_PROMPT,
     QA_PROMPT,
     SARCASM_PROMPT,
-    TEMP_QA_DATA_CSV,
-    TEMP_SARCASM_DATA_CSV,
-    TEMP_SUMMARIZATION_DATA_CSV,
 )
 
 
@@ -71,16 +68,7 @@ class ConfigManager:
     def _resolve_paths(cls, case: str) -> Tuple[Path, Path]:
         """Resolve dataset and prompt template paths for a given case."""
         dataset_path = cls.CASE_PATHS[case]["dataset"]
-
-        if case == "summarization" and TEMP_SUMMARIZATION_DATA_CSV.exists():
-            dataset_path = TEMP_SUMMARIZATION_DATA_CSV
-
-        if case == "question_answering" and TEMP_QA_DATA_CSV.exists():
-            dataset_path = TEMP_QA_DATA_CSV
-
-        if case == "sarcasm" and TEMP_SARCASM_DATA_CSV.exists():
-            dataset_path = TEMP_SARCASM_DATA_CSV
-
         prompt_template_path = cls.CASE_PATHS[case]["prompt_template"]
 
         return Path(dataset_path), Path(prompt_template_path)
+
