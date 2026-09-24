@@ -1,4 +1,4 @@
-# Arabic LLMs Benchmarking Project
+# Arabic LLMs Benchmarking Project 
 
 This project provides a comprehensive benchmarking framework for evaluating Arabic Language Models (LLMs) across multiple natural language processing tasks. The framework assesses model performance on question answering, text summarization, and sarcasm detection tasks using standardized Arabic datasets.
 
