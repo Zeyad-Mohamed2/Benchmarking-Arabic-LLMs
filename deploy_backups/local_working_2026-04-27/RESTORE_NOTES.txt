@@ -1,0 +1,11 @@
+This folder contains the original local-working files before Render deployment edits.
+
+Backed up files:
+- pyproject.toml
+- poetry.lock
+
+To restore local configuration:
+1) Copy files from this folder to the repository root.
+2) Re-run your usual local command(s), for example:
+   poetry install
+   poetry run streamlit run src/benchmark_arabic_llms/main.py

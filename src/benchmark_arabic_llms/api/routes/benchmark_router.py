@@ -1,0 +1,273 @@
+from typing import List, Optional, Any
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import asyncio
+import os
+from sse_starlette.sse import EventSourceResponse
+
+from benchmark_arabic_llms.core.enums import BenchmarkTask
+from benchmark_arabic_llms.app.benchmark_orchestrator import BenchmarkOrchestrator
+from benchmark_arabic_llms.config.data_paths import LOGS_DIR, EXCEL_DIR
+from benchmark_arabic_llms.services.llm_client import OpenRouterClient, GroqClient
+from google import genai
+
+router = APIRouter()
+
+class ConnectionTestRequest(BaseModel):
+    provider: str
+    api_key: str
+    models: List[str]
+
+class BenchmarkRequest(BaseModel):
+    task: str
+    provider: str
+    api_key: str
+    models: List[str]
+    custom_prompt: Optional[str] = None
+    number_of_samples: int = 10
+    gemini_api_key: Optional[str] = None
+    gemini_model_name: Optional[str] = None
+    use_semantic_matching: bool = False
+    enable_checkpoint_mode: bool = False
+    checkpoint_interval: int = 50
+
+@router.get("/setup")
+def get_setup_info():
+    """Returns available tasks and configuration metadata."""
+    return {"tasks": BenchmarkTask.get_all()}
+
+def _test_gemini_connection(api_key: str, model_name: str) -> tuple[bool, str]:
+    try:
+        client = genai.Client(api_key=api_key)
+        client.models.generate_content(model=model_name, contents="Test")
+        return True, "✅ Connection successful"
+    except Exception as e:
+        return False, f"❌ Connection failed: {str(e)[:50]}"
+
+def _test_openrouter_connection(api_key: str, model_name: str) -> tuple[bool, str]:
+    try:
+        client = OpenRouterClient(api_key=api_key, model=model_name)
+        client.generate("Test", temperature=0.0)
+        return True, "✅ Connection successful"
+    except Exception as e:
+        return False, f"❌ Connection failed: {str(e)[:50]}"
+
+def _test_groq_connection(api_key: str, model_name: str) -> tuple[bool, str]:
+    try:
+        client = GroqClient(api_key=api_key, model=model_name)
+        client.generate("Test", temperature=0.0)
+        return True, "✅ Connection successful"
+    except Exception as e:
+        return False, f"❌ Connection failed: {str(e)[:50]}"
+
+@router.post("/test-connection")
+def test_connection(request: ConnectionTestRequest):
+    """Test API connection for given provider and models."""
+    if not request.api_key:raise HTTPException(status_code=400, detail="API key is required")
+    if not request.models:raise HTTPException(status_code=400, detail="At least one model must be selected")
+    
+    results = {}
+    all_success = True
+    for model in request.models:
+        if request.provider == "openrouter":
+            success, message = _test_openrouter_connection(request.api_key, model)
+        elif request.provider == "groq":
+            success, message = _test_groq_connection(request.api_key, model)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid provider")
+            
+        results[model] = message
+        if not success:
+            all_success = False
+
+    return {"success": all_success, "messages": results}
+
+# Global state to track progress for SSE
+benchmark_progress_queues = {}
+
+@router.post("/run-benchmark")
+async def run_benchmark_endpoint(
+    task: str = Form(...),
+    provider: str = Form(...),
+    api_key: str = Form(...),
+    models: str = Form(...), # Comma separated list
+    custom_prompt: Optional[str] = Form(None),
+    number_of_samples: int = Form(10),
+    gemini_api_key: Optional[str] = Form(None),
+    gemini_model_name: Optional[str] = Form(None),
+    use_semantic_matching: bool = Form(False),
+    enable_checkpoint_mode: bool = Form(False),
+    checkpoint_interval: int = Form(50),
+    dataset: Optional[UploadFile] = File(None)
+):
+    """Trigger a benchmark run. Returns an ID which can be used to listen to SSE events."""
+    
+    models_list = [m.strip() for m in models.split(",")]
+    
+    # Capture the current event loop to use in the background thread
+    loop = asyncio.get_running_loop()
+
+    # Generate unique run ID
+    import uuid
+    run_id = str(uuid.uuid4())
+    benchmark_progress_queues[run_id] = asyncio.Queue()
+
+    # Helper to post to the async queue from sync python thread
+    queue = benchmark_progress_queues[run_id]
+    def progress_callback(current: int, total: int, status: str):
+        # Notify the asyncio queue from the sync thread safely
+        loop.call_soon_threadsafe(
+            queue.put_nowait, {"current": current, "total": total, "status": status}
+        )
+
+    dataset_content = None
+    if dataset:
+        dataset_content = dataset # The orchestrator has a stream load strategy
+        # We might need a wrapper around UploadFile to mock Streamlit's UploadedFile.
+        class UploadedFileMock:
+            def __init__(self, file: UploadFile):
+                self.name = file.filename
+                self.file = file.file
+            def getvalue(self):
+                return self.file.read()
+        dataset_content = UploadedFileMock(dataset)
+
+    # Run orchestrator in a background thread to not block the main thread.
+    def do_run():
+        try:
+            orchestrator = BenchmarkOrchestrator(LOGS_DIR, EXCEL_DIR)
+            results = orchestrator.run_multiple(
+                task=task,
+                model_names=models_list,
+                api_key=api_key,
+                provider=provider,
+                custom_prompt=custom_prompt,
+                number_of_samples=number_of_samples,
+                gemini_api_key=gemini_api_key,
+                gemini_model_name=gemini_model_name,
+                use_semantic_matching=use_semantic_matching,
+                progress_callback=progress_callback,
+                uploaded_dataset=dataset_content,
+                enable_checkpoint_mode=enable_checkpoint_mode,
+                checkpoint_interval=checkpoint_interval
+            )
+            # Indicate done
+            loop.call_soon_threadsafe(
+                 queue.put_nowait, {"done": True, "results": results}
+            )
+        except Exception as e:
+            loop.call_soon_threadsafe(
+                 queue.put_nowait, {"error": str(e)}
+            )
+
+    
+    loop.run_in_executor(None, do_run)
+    
+    return {"run_id": run_id}
+
+@router.get("/progress/{run_id}")
+async def get_progress(run_id: str):
+    """SSE endpoint to get updates on the benchmark run."""
+    if run_id not in benchmark_progress_queues:
+         raise HTTPException(status_code=404, detail="Run ID not found")
+         
+    queue = benchmark_progress_queues[run_id]
+
+    async def event_generator():
+        try:
+            while True:
+                msg = await queue.get()
+                if "error" in msg:
+                    yield {"event": "error", "data": msg["error"]}
+                    break
+                if "done" in msg:
+                    import json
+                    yield {"event": "done", "data": json.dumps(msg["results"])}
+                    break
+                
+                import json
+                yield {"event": "progress", "data": json.dumps(msg)}
+        finally:
+            if run_id in benchmark_progress_queues:
+                # Cleanup to avoid memory leak eventually
+                pass
+
+    return EventSourceResponse(event_generator())
+
+@router.get("/download")
+async def download_file(file_path: str):
+    """Download a file by its absolute path."""
+    import os
+    
+    if not file_path:
+        raise HTTPException(status_code=400, detail="File path is required")
+        
+    # Validate the file exists
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    # Ensure it's inside allowed directories
+    abs_path = os.path.abspath(file_path)
+    allowed_dirs = [os.path.abspath(str(LOGS_DIR)), os.path.abspath(str(EXCEL_DIR))]
+    
+    is_allowed = any(abs_path.startswith(d) for d in allowed_dirs)
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Access to this path is forbidden")
+        
+    return FileResponse(
+        path=abs_path, 
+        filename=os.path.basename(abs_path),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+@router.get("/leaderboard")
+async def get_leaderboard():
+    """
+    Read the leaderboard CSV files from data/leaderboard and return as JSON.
+    Groups the results by task name.
+    """
+    import pandas as pd
+    from pathlib import Path
+    
+    # Path is relative to where main.py runs (project root)
+    leaderboard_dir = Path("data/leaderboard")
+    
+    if not leaderboard_dir.exists():
+        return {"success": False, "error": "Leaderboard data directory not found"}
+        
+    results = {}
+    try:
+        for file in leaderboard_dir.glob("*_results.csv"):
+            task_name = file.stem.replace("_results", "")
+            df = pd.read_csv(file)
+            
+            # Remove 'Total' column
+            if "Total" in df.columns:
+                df = df.drop(columns=["Total"])
+                
+            # Implement Combined Score logic
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            if numeric_cols:
+                # Calculate mean of all metrics for a combined score
+                df["Combined_Score"] = df[numeric_cols].mean(axis=1).round(4)
+            
+            # Sort leaderboard from highest to lowest score
+            sort_cols = []
+            if task_name == "sarcasm":
+                sort_cols = ["Combined_Score", "Accuracy", "F1"]
+            else:
+                sort_cols = ["Combined_Score", "Sem_Match", "BERTScore_F1"]
+                
+            available_sort_cols = [col for col in sort_cols if col in df.columns]
+            if available_sort_cols:
+                df = df.sort_values(by=available_sort_cols, ascending=False)
+            
+            # Clean up the dataframe (handle NaNs if any)
+            df = df.fillna("")
+            
+            results[task_name] = df.to_dict(orient="records")
+            
+        return {"success": True, "data": results}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
