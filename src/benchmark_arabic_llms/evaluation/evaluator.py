@@ -27,6 +27,17 @@ class Evaluator:
         if not cleaned_refs or not cleaned_preds:
             raise EvaluationError("No valid data after cleaning")
 
+        from benchmark_arabic_llms.tasks.registry import TaskRegistry
+        import benchmark_arabic_llms.tasks  # noqa: F401
+
+        task_str = self.task.value if hasattr(self.task, "value") else str(self.task)
+        if TaskRegistry.is_registered(task_str):
+            task_obj = TaskRegistry.get(task_str)
+            try:
+                return task_obj.evaluate(cleaned_refs, cleaned_preds)
+            except Exception as e:
+                raise EvaluationError(f"Evaluation failed for task '{task_str}': {e}")
+
         evaluators = {
             BenchmarkTask.SUMMARIZATION: eval_summarization.evaluate_summaries,
             BenchmarkTask.QA: eval_qa.evaluate_qa,
@@ -41,6 +52,7 @@ class Evaluator:
             return evaluator_fn(cleaned_refs, cleaned_preds)
         except Exception as e:
             raise EvaluationError(f"Evaluation failed: {e}")
+
 
     def _clean_data(
         self, references: List[Any], predictions: List[Any]

@@ -15,4 +15,12 @@ class BenchmarkTask(str, Enum):
 
     @classmethod
     def get_all(cls):
+        try:
+            from benchmark_arabic_llms.tasks.registry import TaskRegistry
+            import benchmark_arabic_llms.tasks  # noqa: F401
+            names = TaskRegistry.list_names()
+            if names:
+                return names
+        except Exception:
+            pass
         return [task.value for task in cls]

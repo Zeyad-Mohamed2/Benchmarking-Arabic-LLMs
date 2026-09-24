@@ -16,6 +16,14 @@ class PromptBuilder:
 
     def build(self, item: Dict) -> Tuple[str, str]:
         """Build prompt and extract reference based on task type."""
+        from benchmark_arabic_llms.tasks.registry import TaskRegistry
+        import benchmark_arabic_llms.tasks  # noqa: F401
+
+        task_str = self.task.value if hasattr(self.task, "value") else str(self.task)
+        if TaskRegistry.is_registered(task_str):
+            task_obj = TaskRegistry.get(task_str)
+            return task_obj.build_prompt(item, template=self.template)
+
         builders = {
             BenchmarkTask.SUMMARIZATION: self._build_summarization,
             BenchmarkTask.QA: self._build_qa,
@@ -27,6 +35,7 @@ class PromptBuilder:
             raise ValueError(f"Unknown task: {self.task}")
 
         return builder(item)
+
 
     def _build_summarization(self, item: Dict) -> Tuple[str, str]:
         prompt = self.template.format(text=item.get("text", ""))

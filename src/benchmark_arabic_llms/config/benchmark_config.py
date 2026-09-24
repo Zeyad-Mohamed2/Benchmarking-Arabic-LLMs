@@ -7,14 +7,8 @@ from pathlib import Path
 from typing import Tuple
 from dataclasses import dataclass
 
-from benchmark_arabic_llms.config.data_paths import (
-    SUMMARIZATION_DATA_CSV,
-    QA_DATA_CSV,
-    SARCASM_DATA_CSV,
-    SUMMARIZATION_PROMPT,
-    QA_PROMPT,
-    SARCASM_PROMPT,
-)
+from benchmark_arabic_llms.tasks.registry import TaskRegistry
+import benchmark_arabic_llms.tasks  # noqa: F401 - ensure auto-registration
 
 
 @dataclass
@@ -27,48 +21,30 @@ class BenchmarkConfig:
 
 
 class ConfigManager:
-    """Handles configuration loading, validation, and path resolution."""
-
-    CASE_PATHS = {
-        "summarization": {
-            "dataset": SUMMARIZATION_DATA_CSV,
-            "prompt_template": SUMMARIZATION_PROMPT,
-        },
-        "question_answering": {
-            "dataset": QA_DATA_CSV,
-            "prompt_template": QA_PROMPT,
-        },
-        "sarcasm": {
-            "dataset": SARCASM_DATA_CSV,
-            "prompt_template": SARCASM_PROMPT,
-        },
-    }
-
-    VALID_CASES = set(CASE_PATHS.keys())
+    """Handles configuration loading, validation, and path resolution via TaskRegistry."""
 
     @classmethod
     def create(cls, case: str) -> BenchmarkConfig:
-        """Create BenchmarkConfig directly from case name (ignore YAML/API keys)."""
-        case = case.lower()
+        """Create BenchmarkConfig directly from task name."""
+        task_name = str(case).lower()
 
-        if case not in cls.VALID_CASES:
+        if not TaskRegistry.is_registered(task_name):
             raise ValueError(
-                f"Invalid case: {case}. Must be one of {sorted(cls.VALID_CASES)}"
+                f"Invalid case: {case}. Must be one of {TaskRegistry.list_names()}"
             )
 
-        dataset_path, prompt_template_path = cls._resolve_paths(case)
+        task = TaskRegistry.get(task_name)
 
         return BenchmarkConfig(
-            case=case,
-            dataset_path=dataset_path,
-            prompt_template_path=prompt_template_path,
+            case=task_name,
+            dataset_path=task.default_dataset_path,
+            prompt_template_path=task.default_prompt_template_path,
         )
 
     @classmethod
     def _resolve_paths(cls, case: str) -> Tuple[Path, Path]:
         """Resolve dataset and prompt template paths for a given case."""
-        dataset_path = cls.CASE_PATHS[case]["dataset"]
-        prompt_template_path = cls.CASE_PATHS[case]["prompt_template"]
+        task = TaskRegistry.get(str(case).lower())
+        return task.default_dataset_path, task.default_prompt_template_path
 
-        return Path(dataset_path), Path(prompt_template_path)
 
