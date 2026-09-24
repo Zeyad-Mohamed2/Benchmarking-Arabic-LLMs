@@ -275,3 +275,75 @@ async def get_leaderboard():
         return {"success": True, "data": results}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+class LeaderboardPromoteRequest(BaseModel):
+    task: str
+    model: str
+    scores: dict
+    total_samples: int = 1000
+    semantic_match_rate: Optional[float] = None
+
+
+@router.post("/leaderboard/promote")
+async def promote_to_leaderboard(request: LeaderboardPromoteRequest):
+    """Promote or update a benchmarked model in the official leaderboard CSV."""
+    import pandas as pd
+    from pathlib import Path
+
+    leaderboard_dir = Path("data/leaderboard")
+    leaderboard_dir.mkdir(parents=True, exist_ok=True)
+
+    task_map = {
+        "qa": "question_answering",
+        "question_answering": "question_answering",
+        "summarization": "summarization",
+        "sarcasm": "sarcasm",
+    }
+    canonical_task = task_map.get(request.task.lower(), request.task.lower())
+    csv_path = leaderboard_dir / f"{canonical_task}_results.csv"
+
+    scores = request.scores or {}
+    clean_model_name = request.model.replace(":free", "")
+
+    if canonical_task == "sarcasm":
+        row_data = {
+            "Model": clean_model_name,
+            "Total": request.total_samples,
+            "Accuracy": round(float(scores.get("Accuracy", scores.get("accuracy", 0.0))), 4),
+            "F1": round(float(scores.get("F1", scores.get("f1", 0.0))), 4),
+            "Precision": round(float(scores.get("Precision", scores.get("precision", 0.0))), 4),
+            "Recall": round(float(scores.get("Recall", scores.get("recall", 0.0))), 4),
+            "ROC_AUC": round(float(scores.get("ROC_AUC", scores.get("roc_auc", 0.0))), 4),
+        }
+    else:
+        row_data = {
+            "Model": clean_model_name,
+            "Total": request.total_samples,
+            "ROUGE1": round(float(scores.get("ROUGE1", scores.get("rouge1", 0.0))), 4),
+            "ROUGEL": round(float(scores.get("ROUGEL", scores.get("rougeL", 0.0))), 4),
+            "BLEU": round(float(scores.get("BLEU", scores.get("bleu", 0.0))), 4),
+            "METEOR": round(float(scores.get("METEOR", scores.get("meteor", 0.0))), 4),
+            "BERTScore_F1": round(float(scores.get("BERTScore", scores.get("bert_score", 0.0))), 4),
+            "Sem_Match": round(float(request.semantic_match_rate or 0.0), 4),
+        }
+
+    try:
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            # Check if model already exists
+            match_idx = df.index[df["Model"] == clean_model_name].tolist()
+            if match_idx:
+                for col, val in row_data.items():
+                    if col in df.columns:
+                        df.at[match_idx[0], col] = val
+            else:
+                df = pd.concat([df, pd.DataFrame([row_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([row_data])
+
+        df.to_csv(csv_path, index=False)
+        return await get_leaderboard()
+    except Exception as e:
+        return {"success": False, "error": f"Failed to promote model to leaderboard: {e}"}
+
