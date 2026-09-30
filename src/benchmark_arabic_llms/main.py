@@ -36,11 +36,8 @@ def main():
         from PIL import Image
         
         # We are exactly inside streamlit run
-        logo_left = Image.open("assets/Fayoum University Logo.jpeg")
-        logo_right = Image.open("assets/FCAI Fayoum University Logo.jpeg")
         st.set_page_config(
             page_title="Framework for Open-Source Multilingual Large Language Models",
-            page_icon=logo_left,
             layout="wide",
         )
 
@@ -65,13 +62,7 @@ def main():
                 """,
             unsafe_allow_html=True,
         )
-
-        col1, col2, col3 = st.columns([1, 4, 1])
-        with col1:
-            st.image(logo_left, width=100)
-        with col3:
-            st.image(logo_right, width=120)
-
+        
         app = StreamlitBenchmarkApp()
         app.run()
         return

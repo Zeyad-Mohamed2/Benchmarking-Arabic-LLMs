@@ -14,10 +14,6 @@ export const Header: React.FC<HeaderProps> = ({ mainView, setMainView }) => {
           <LayoutTemplate className="h-8 w-8 mr-3 text-[#32C4B7]" />
           Framework for Open-Source Multilingual Large Language Models
         </h1>
-        <div className="flex items-center space-x-6">
-          <img src="/assets/Fayoum University Logo.jpeg" alt="Fayoum University" className="h-16 object-contain" />
-          <img src="/assets/FCAI Fayoum University Logo.jpeg" alt="FCAI Fayoum University" className="h-16 object-contain" />
-        </div>
       </div>
       <p className="text-gray-400 text-sm max-w-4xl leading-relaxed">
         Evaluate and compare state-of-the-art Arabic Large Language Models.
