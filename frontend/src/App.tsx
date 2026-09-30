@@ -97,7 +97,11 @@ export default function App() {
   const getCompiledModelsList = () => {
     const opts = provider === 'groq' ? GROQ_MODELS : OPENROUTER_MODELS;
     return models
-      .map((m) => (m.display === 'Other (custom)' && m.custom ? m.custom : opts[m.display]))
+      .map((m) => {
+        if (m.id) return m.id;
+        if (m.display === 'Other (custom)' && m.custom) return m.custom;
+        return opts[m.display] || m.display;
+      })
       .filter(Boolean);
   };
 
@@ -160,6 +164,7 @@ export default function App() {
       (res: BenchmarkResults) => {
         setResults(res);
         setIsRunning(false);
+        setErrorMsg(null);
       },
       (err: string) => {
         setErrorMsg(err);

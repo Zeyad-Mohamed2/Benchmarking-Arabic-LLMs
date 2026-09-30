@@ -1,6 +1,8 @@
-import React from 'react';
-import { Settings, Play, Database, Key, Loader2, Plus, Minus, BrainCircuit, CheckCircle2, XCircle } from 'lucide-react';
-import { TaskType, ProviderType, ModelSelection } from '../../types';
+import React, { useState } from 'react';
+import { Settings, Play, Database, Key, Loader2, Minus, BrainCircuit, CheckCircle2, XCircle } from 'lucide-react';
+import { TaskType, ProviderType, ModelSelection, ModelCatalogItem } from '../../types';
+import { BrowseModelsModal } from '../modals/BrowseModelsModal';
+import { DEFAULT_GEMINI_CATALOG } from '../../data/modelsCatalog';
 
 interface ConfigSidebarProps {
   task: TaskType;
@@ -65,7 +67,19 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
   openRouterModels,
   groqModels,
 }) => {
+  const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
+  const [isCustomGemini, setIsCustomGemini] = useState(false);
   const currentProviderModels = provider === 'groq' ? groqModels : openRouterModels;
+
+  const handleApplyBrowseModels = (selected: ModelCatalogItem[]) => {
+    setModels(
+      selected.map((s) => ({
+        display: s.name,
+        custom: s.isCustom ? s.id : '',
+        id: s.id,
+      }))
+    );
+  };
 
   return (
     <aside className="w-80 bg-[#111827] border-r border-gray-800 p-6 flex flex-col shrink-0 overflow-y-auto relative z-10 custom-scrollbar scrollbar-thin">
@@ -111,71 +125,50 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </div>
         </div>
 
-        {/* Model Selection */}
-        <div className="bg-[#1f2937]/30 border border-gray-700 p-4 rounded-lg">
-          <div className="flex justify-between items-center mb-3">
+        {/* Model Selection via Browse Modal */}
+        <div className="bg-[#1f2937]/30 border border-gray-700 p-4 rounded-lg space-y-3">
+          <div className="flex justify-between items-center">
             <label className="text-sm font-medium text-gray-300 flex items-center">
-              <Database className="mr-1.5 h-4 w-4 text-[#32C4B7]" /> Select Models
+              <Database className="mr-1.5 h-4 w-4 text-[#32C4B7]" /> Selected Models ({models.length}/3)
             </label>
           </div>
 
-          {models.map((m, idx) => (
-            <div key={idx} className="mb-3 relative group">
-              <label className="block text-xs text-gray-500 mb-1">Model {idx + 1}</label>
-              <div className="flex gap-2">
-                <div className="flex-1 space-y-2">
-                  <select
-                    className="w-full bg-[#1f2937] border border-gray-700 rounded p-2 text-sm text-gray-200 focus:outline-none focus:border-[#32C4B7]"
-                    value={m.display}
-                    onChange={(e) => {
-                      const newMw = [...models];
-                      newMw[idx].display = e.target.value;
-                      setModels(newMw);
-                    }}
-                  >
-                    {Object.keys(currentProviderModels).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-
-                  {m.display === 'Other (custom)' && (
-                    <input
-                      type="text"
-                      placeholder="e.g. meta-llama/llama-3..."
-                      className="w-full bg-[#111827] border border-gray-700 rounded p-2 text-sm text-gray-200 focus:outline-none focus:border-[#32C4B7]"
-                      value={m.custom}
-                      onChange={(e) => {
-                        const n = [...models];
-                        n[idx].custom = e.target.value;
-                        setModels(n);
-                      }}
-                    />
+          {/* Selected Model Chips */}
+          <div className="space-y-2">
+            {models.map((m, idx) => {
+              const displayName = m.display === 'Other (custom)' && m.custom ? m.custom : m.display;
+              const isCustom = m.display === 'Other (custom)';
+              return (
+                <div
+                  key={idx}
+                  className="bg-[#111827] border border-gray-700/80 rounded-lg p-2.5 flex items-center justify-between text-xs group hover:border-[#32C4B7]/50 transition"
+                >
+                  <div className="min-w-0 flex-1 mr-2">
+                    <div className="font-semibold text-gray-200 truncate">{displayName}</div>
+                    <div className="text-[10px] text-gray-500 font-mono truncate">
+                      {isCustom ? 'Custom slug' : currentProviderModels[m.display] || m.id || m.display}
+                    </div>
+                  </div>
+                  {models.length > 1 && (
+                    <button
+                      onClick={() => setModels(models.filter((_, i) => i !== idx))}
+                      className="p-1 text-gray-500 hover:text-red-400 rounded hover:bg-gray-800 transition"
+                      title="Remove model"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
                   )}
                 </div>
-                {models.length > 1 && (
-                  <button
-                    onClick={() => setModels(models.filter((_, i) => i !== idx))}
-                    className="mt-1 h-[34px] px-2 text-gray-500 hover:text-red-400 bg-gray-800/50 hover:bg-gray-800 rounded border border-transparent"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
 
-          {models.length < 3 && (
-            <button
-              onClick={() =>
-                setModels([...models, { display: Object.keys(currentProviderModels)[0], custom: '' }])
-              }
-              className="text-xs flex items-center text-[#32C4B7] hover:text-[#2aa69b] font-medium transition-colors"
-            >
-              <Plus className="h-3 w-3 mr-1" /> Add Model
-            </button>
-          )}
+          <button
+            onClick={() => setIsBrowseModalOpen(true)}
+            className="w-full py-2 bg-[#32C4B7]/20 hover:bg-[#32C4B7]/30 text-[#32C4B7] border border-[#32C4B7]/50 rounded-md text-xs flex justify-center items-center font-bold gap-1.5 transition shadow-sm"
+          >
+            🔍 Browse & Select Models
+          </button>
         </div>
 
         {/* API Key & Test Connection */}
@@ -301,18 +294,51 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               </label>
               {useSemanticMatching && (
                 <div className="space-y-2 mt-2 ml-6">
-                  <select
-                    className="w-full bg-[#111827] border border-gray-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#32C4B7]"
-                    value={geminiModel}
-                    onChange={(e) => setGeminiModel(e.target.value)}
-                  >
-                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                    <option value="gemini-2.0-pro">gemini-2.0-pro</option>
-                  </select>
+                  {!isCustomGemini ? (
+                    <select
+                      className="w-full bg-[#111827] border border-gray-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#32C4B7]"
+                      value={geminiModel}
+                      onChange={(e) => {
+                        if (e.target.value === 'custom') {
+                          setIsCustomGemini(true);
+                          setGeminiModel('');
+                        } else {
+                          setGeminiModel(e.target.value);
+                        }
+                      }}
+                    >
+                      {DEFAULT_GEMINI_CATALOG.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} ({g.speed})
+                        </option>
+                      ))}
+                      <option value="custom">➕ Plug Custom Gemini Model...</option>
+                    </select>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-gray-400">Custom Gemini Model ID:</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomGemini(false);
+                            setGeminiModel(DEFAULT_GEMINI_CATALOG[0].id);
+                          }}
+                          className="text-[10px] text-[#32C4B7] hover:underline"
+                        >
+                          Use Standard Models
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="e.g. gemini-1.5-pro-latest"
+                        value={geminiModel}
+                        onChange={(e) => setGeminiModel(e.target.value)}
+                        className="w-full bg-[#111827] border border-gray-700 rounded p-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#32C4B7]"
+                      />
+                    </div>
+                  )}
+
                   <input
                     type="password"
                     placeholder="Gemini API Key required"
@@ -346,6 +372,17 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           {isRunning ? 'Running...' : 'Run Benchmark'}
         </button>
       </div>
+
+      {/* Browse Models Modal */}
+      <BrowseModelsModal
+        isOpen={isBrowseModalOpen}
+        onClose={() => setIsBrowseModalOpen(false)}
+        provider={provider}
+        selectedModelIds={models.map((m) =>
+          m.id || (m.display === 'Other (custom)' && m.custom ? m.custom : currentProviderModels[m.display] || m.display)
+        )}
+        onApplySelection={handleApplyBrowseModels}
+      />
     </aside>
   );
 };

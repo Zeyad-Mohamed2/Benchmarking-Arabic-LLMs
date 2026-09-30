@@ -5,6 +5,28 @@ export type ProviderType = 'openrouter' | 'groq';
 export interface ModelSelection {
   display: string;
   custom: string;
+  id?: string;
+}
+
+export interface ModelCatalogItem {
+  id: string;
+  name: string;
+  provider: ProviderType;
+  paramSize?: string;
+  isFree?: boolean;
+  contextWindow?: string;
+  description?: string;
+  tags?: string[];
+  isCustom?: boolean;
+}
+
+export interface GeminiCatalogItem {
+  id: string;
+  name: string;
+  speed: string;
+  tier: string;
+  description?: string;
+  isCustom?: boolean;
 }
 
 export interface ProgressState {
@@ -71,6 +93,7 @@ export interface BenchmarkResults {
   excel_path?: string;
   detailed_samples_path?: string;
   comparison_excel_path?: string;
+  html_report_path?: string;
   error?: string;
 }
 
