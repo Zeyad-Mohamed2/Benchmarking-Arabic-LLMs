@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Download, BarChart2, Database, CheckCircle2, XCircle, Trophy } from 'lucide-react';
-import { BenchmarkResults, TaskType } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Download, Database, CheckCircle2, XCircle, Trophy, Globe, Printer, FileSpreadsheet } from 'lucide-react';
+import { BenchmarkResults, TaskType, SampleItem } from '../../types';
 import { ModelRadarChart } from '../charts/ModelRadarChart';
-import { promoteToLeaderboard } from '../../services/api';
+import { promoteToLeaderboard, fetchSamples } from '../../services/api';
+import { SampleInspector } from './SampleInspector';
 
 interface ResultsViewerProps {
   results: BenchmarkResults;
@@ -11,9 +12,27 @@ interface ResultsViewerProps {
 }
 
 export const ResultsViewer: React.FC<ResultsViewerProps> = ({ results, task, apiBase }) => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'radar' | 'llm' | 'scores' | 'stats'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'radar' | 'samples' | 'llm' | 'scores' | 'stats'>('summary');
   const [promotionStatus, setPromotionStatus] = useState<Record<string, string>>({});
   const [isPromoting, setIsPromoting] = useState<string | null>(null);
+  const [samples, setSamples] = useState<SampleItem[]>(results.samples || []);
+  const [loadingSamples, setLoadingSamples] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (results.samples && results.samples.length > 0) {
+      setSamples(results.samples);
+    } else {
+      setLoadingSamples(true);
+      fetchSamples(task, 100)
+        .then((res) => {
+          if (res.samples && res.samples.length > 0) {
+            setSamples(res.samples);
+          }
+        })
+        .catch((err) => console.warn('Could not load samples:', err))
+        .finally(() => setLoadingSamples(false));
+    }
+  }, [results, task]);
 
   const handlePromote = async (modelName: string) => {
     const modelData = results.model_results[modelName];
@@ -40,32 +59,64 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ results, task, api
       <div className="p-6 border-b border-gray-700/50 bg-[#1f2937]/30 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="text-lg font-bold text-white mb-1 flex items-center">
-            <Download className="h-5 w-5 mr-2 text-[#32C4B7]" /> Benchmark Exports
+            <Download className="h-5 w-5 mr-2 text-[#32C4B7]" /> Executive Exports
           </h3>
-          <p className="text-xs text-gray-400">Download formatted Excel workbooks or promote models directly into the public leaderboard.</p>
+          <p className="text-xs text-gray-400">Export publication-quality Excel workbooks, standalone HTML reports, or print directly to PDF.</p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
+          {/* HTML Standalone Report */}
+          {results.html_report_path && (
+            <button
+              onClick={() =>
+                window.open(`${apiBase}/download?file_path=${encodeURIComponent(results.html_report_path!)}`, '_blank')
+              }
+              className="px-3.5 py-2 bg-gradient-to-r from-[#32C4B7] to-[#2aa69b] hover:brightness-110 text-[#0b0f19] font-bold rounded-lg shadow transition flex items-center text-xs"
+              title="Open self-contained interactive HTML report"
+            >
+              <Globe className="h-3.5 w-3.5 mr-1.5" /> Interactive HTML Report
+            </button>
+          )}
+
+          {/* PDF Export (via browser print stylesheet) */}
+          {results.html_report_path && (
+            <button
+              onClick={() =>
+                window.open(`${apiBase}/download?file_path=${encodeURIComponent(results.html_report_path!)}`, '_blank')
+              }
+              className="px-3.5 py-2 bg-[#1e293b] hover:bg-[#334155] text-white border border-gray-600 font-semibold rounded-lg shadow transition flex items-center text-xs"
+              title="Print or Save publication PDF"
+            >
+              <Printer className="h-3.5 w-3.5 mr-1.5 text-[#32C4B7]" /> Export PDF
+            </button>
+          )}
+
+          {/* Excel Comparison */}
           {results.comparison_excel_path && (
             <button
               onClick={() =>
                 window.open(`${apiBase}/download?file_path=${encodeURIComponent(results.comparison_excel_path!)}`, '_blank')
               }
-              className="px-4 py-2 bg-[#32C4B7] hover:bg-[#2aa69b] text-[#0b0f19] font-semibold rounded shadow transition-colors flex items-center text-sm"
+              className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-semibold rounded-lg shadow transition flex items-center text-xs"
+              title="Download executive Excel workbook with KPI cards and heatmaps"
             >
-              <BarChart2 className="h-4 w-4 mr-2" /> Download Comparison
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Executive Excel (.xlsx)
             </button>
           )}
+
+          {/* Single Excel summary */}
           {results.excel_path && !results.comparison_excel_path && (
             <button
               onClick={() =>
                 window.open(`${apiBase}/download?file_path=${encodeURIComponent(results.excel_path!)}`, '_blank')
               }
-              className="px-4 py-2 bg-[#32C4B7] hover:bg-[#2aa69b] text-[#0b0f19] font-semibold rounded shadow transition-colors flex items-center text-sm"
+              className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-semibold rounded-lg shadow transition flex items-center text-xs"
             >
-              <BarChart2 className="h-4 w-4 mr-2" /> Download Results
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Executive Excel (.xlsx)
             </button>
           )}
+
+          {/* Detailed Samples */}
           {results.detailed_samples_path && (
             <button
               onClick={() =>
@@ -74,9 +125,9 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ results, task, api
                   '_blank'
                 )
               }
-              className="px-4 py-2 bg-[#374151] hover:bg-[#4b5563] text-gray-200 font-semibold rounded shadow transition-colors flex items-center text-sm"
+              className="px-3.5 py-2 bg-[#374151] hover:bg-[#4b5563] text-gray-200 font-semibold rounded-lg shadow transition flex items-center text-xs"
             >
-              <Database className="h-4 w-4 mr-2" /> Download Samples
+              <Database className="h-3.5 w-3.5 mr-1.5" /> Detailed Samples (.xlsx)
             </button>
           )}
         </div>
@@ -103,6 +154,22 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ results, task, api
           }`}
         >
           🕸️ Radar Analysis
+        </button>
+        <button
+          onClick={() => setActiveTab('samples')}
+          className={`px-6 py-3 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap flex items-center ${
+            activeTab === 'samples'
+              ? 'border-[#32C4B7] text-[#32C4B7]'
+              : 'border-transparent text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          🔍 Sample Inspector
+          {loadingSamples && <span className="ml-2 text-[10px] text-gray-400">...</span>}
+          {!loadingSamples && samples.length > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded-full bg-[#1e293b] text-[#32C4B7] border border-[#32C4B7]/40">
+              {new Set(samples.map(s => s.example_number)).size}
+            </span>
+          )}
         </button>
         {results?.stats?.semantic_matching_enabled && (
           <button
@@ -221,6 +288,13 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ results, task, api
         {activeTab === 'radar' && (
           <div>
             <ModelRadarChart results={results} />
+          </div>
+        )}
+
+        {/* SAMPLES TAB */}
+        {activeTab === 'samples' && (
+          <div>
+            <SampleInspector samples={samples} task={task} />
           </div>
         )}
 

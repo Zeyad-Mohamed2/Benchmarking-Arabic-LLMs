@@ -155,8 +155,22 @@ async def run_benchmark_endpoint(
                 progress_callback=progress_callback,
                 uploaded_dataset=dataset_content,
                 enable_checkpoint_mode=enable_checkpoint_mode,
-                checkpoint_interval=checkpoint_interval
             )
+            
+            # Generate standalone interactive HTML & PDF-ready report
+            if results and results.get("success"):
+                try:
+                    from benchmark_arabic_llms.reporting.html_report import generate_html_report
+                    html_reports_dir = (EXCEL_DIR.parent / "html_reports").resolve()
+                    html_path = generate_html_report(
+                        model_results=results.get("model_results", {}),
+                        task=task,
+                        output_dir=html_reports_dir
+                    )
+                    results["html_report_path"] = str(html_path)
+                except Exception as html_err:
+                    print(f"Notice: HTML report generation skipped: {html_err}")
+
             # Indicate done
             loop.call_soon_threadsafe(
                  queue.put_nowait, {"done": True, "results": results}
@@ -166,7 +180,6 @@ async def run_benchmark_endpoint(
                  queue.put_nowait, {"error": str(e)}
             )
 
-    
     loop.run_in_executor(None, do_run)
     
     return {"run_id": run_id}
@@ -211,7 +224,7 @@ async def download_file(file_path: str):
         raise HTTPException(status_code=404, detail="File not found")
         
     # Ensure it's inside allowed directories
-    allowed_dirs = [LOGS_DIR.resolve(), EXCEL_DIR.resolve()]
+    allowed_dirs = [LOGS_DIR.resolve(), EXCEL_DIR.resolve(), (EXCEL_DIR.parent / "html_reports").resolve()]
     is_allowed = any(
         target_path == d or target_path.is_relative_to(d)
         for d in allowed_dirs
@@ -219,11 +232,23 @@ async def download_file(file_path: str):
     if not is_allowed:
         raise HTTPException(status_code=403, detail="Access to this path is forbidden")
         
+    is_html = target_path.suffix.lower() == ".html"
+    media_type = "text/html; charset=utf-8" if is_html else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    headers = {"Content-Disposition": f"inline; filename={target_path.name}"} if is_html else None
+
     return FileResponse(
         path=str(target_path), 
         filename=target_path.name,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        media_type=media_type,
+        headers=headers
     )
+
+@router.get("/samples")
+async def get_benchmark_samples(task: str, limit: int = 100):
+    """Retrieve recent evaluated samples with prompts, references, predictions, and judge feedback."""
+    orchestrator = BenchmarkOrchestrator(LOGS_DIR, EXCEL_DIR)
+    samples = orchestrator.report_service.get_recent_samples(LOGS_DIR, task, limit)
+    return {"task": task, "count": len(samples), "samples": samples}
 
 @router.get("/leaderboard")
 async def get_leaderboard():

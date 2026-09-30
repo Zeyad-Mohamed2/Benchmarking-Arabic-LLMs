@@ -82,6 +82,21 @@ export interface ModelResultItem {
   error_type?: string;
 }
 
+export interface SampleItem {
+  model: string;
+  example_number: number;
+  task: string;
+  timestamp: string;
+  input_text: string;
+  question?: string;
+  expected_output: string;
+  model_output: string;
+  match: boolean;
+  match_type: string;
+  match_confidence?: number | null;
+  judge_explanation?: string;
+}
+
 export interface BenchmarkResults {
   success: boolean;
   model_results: Record<string, ModelResultItem>;
@@ -90,6 +105,7 @@ export interface BenchmarkResults {
     models: string[];
     semantic_matching_enabled: boolean;
   };
+  samples?: SampleItem[];
   excel_path?: string;
   detailed_samples_path?: string;
   comparison_excel_path?: string;

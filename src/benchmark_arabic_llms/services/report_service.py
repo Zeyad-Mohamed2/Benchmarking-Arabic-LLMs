@@ -63,6 +63,22 @@ class ReportService:
         """
         return self.excel_exporter.export_detailed_samples(log_dir, case, n_samples)
 
+    def get_recent_samples(
+        self, log_dir: Path, case: str, n_samples: int = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get structured list of recent samples from logs.
+
+        Args:
+            log_dir: Directory containing the log files
+            case: The task case (summarization, qa, sarcasm)
+            n_samples: Number of samples in the current run
+
+        Returns:
+            List of structured sample dictionaries
+        """
+        return self.excel_exporter.load_recent_samples(log_dir, case, n_samples)
+
     def export_model_comparison(self, model_results: Dict[str, Any], case: str) -> Path:
         """
         Export comparison of multiple models side-by-side.

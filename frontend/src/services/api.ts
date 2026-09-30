@@ -83,6 +83,7 @@ export function createProgressStream(
   onError: (error: string) => void
 ): EventSource {
   const eventSource = new EventSource(`${API_BASE}/progress/${runId}`);
+  let isFinished = false;
 
   eventSource.addEventListener('progress', (e: MessageEvent) => {
     try {
@@ -95,6 +96,8 @@ export function createProgressStream(
 
   eventSource.addEventListener('done', (e: MessageEvent) => {
     try {
+      isFinished = true;
+      eventSource.close();
       const data = JSON.parse(e.data);
       onDone(data);
     } catch (err) {
@@ -103,6 +106,10 @@ export function createProgressStream(
   });
 
   eventSource.addEventListener('error', (e: any) => {
+    if (isFinished || eventSource.readyState === EventSource.CLOSED) {
+      return;
+    }
+    eventSource.close();
     onError(e?.data || 'Connection lost to benchmark server');
   });
 
@@ -136,3 +143,13 @@ export async function promoteToLeaderboard(
   const data = await res.json();
   return data;
 }
+
+export async function fetchSamples(
+  task: string,
+  limit: number = 100
+): Promise<{ task: string; count: number; samples: any[] }> {
+  const res = await fetch(`${API_BASE}/samples?task=${encodeURIComponent(task)}&limit=${limit}`);
+  const data = await res.json();
+  return data;
+}
+

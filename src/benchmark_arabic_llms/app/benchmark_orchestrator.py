@@ -380,6 +380,9 @@ class BenchmarkOrchestrator:
             detailed_samples_path = self.report_service.export_detailed_samples(
                 self.log_dir, task_str, total_examples
             )
+            recent_samples = self.report_service.get_recent_samples(
+                self.log_dir, task_str, total_examples
+            )
 
             # Generate comparison Excel file if multiple models
             comparison_excel_path = None
@@ -400,6 +403,7 @@ class BenchmarkOrchestrator:
             return {
                 "success": True,
                 "model_results": model_results,
+                "samples": recent_samples,
                 "stats": {
                     "n_models": len(model_results),
                     "models": list(model_results.keys()),

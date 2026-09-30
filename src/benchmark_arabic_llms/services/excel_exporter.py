@@ -73,11 +73,108 @@ class ExcelExporter:
 
         try:
             df.to_excel(current_run_path, index=False)
+            try:
+                from benchmark_arabic_llms.reporting.excel_styler import style_existing_workbook
+                style_existing_workbook(current_run_path, task_name=case)
+            except Exception as style_err:
+                print(f"Notice: Excel styling skipped: {style_err}")
             print(f"✓ Current run exported: {current_run_path}")
             return current_run_path
         except Exception as e:
             print(f"✗ Failed to export current run: {e}")
             return None
+
+    def load_recent_samples(
+        self, log_dir: Path, case: str, n_samples: int = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Load detailed sample data from the log JSONL file.
+        Returns a structured list of sample dictionaries.
+
+        Args:
+            log_dir: Directory containing the log files
+            case: The task case (summarization, qa, sarcasm)
+            n_samples: Number of samples in the current run (if None, loads all)
+
+        Returns:
+            List of structured sample dictionaries
+        """
+        import json
+        from collections import deque
+
+        jsonl_path = log_dir / f"{case}_logs.jsonl"
+        if not jsonl_path.exists():
+            return []
+
+        try:
+            if n_samples is not None and n_samples > 0:
+                recent_samples = deque(maxlen=n_samples)
+            else:
+                recent_samples = []
+
+            with open(jsonl_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        sample = json.loads(line)
+                        if isinstance(recent_samples, deque):
+                            recent_samples.append(sample)
+                        else:
+                            recent_samples.append(sample)
+
+            if not recent_samples:
+                return []
+
+            samples = list(recent_samples)
+            detailed_data = []
+            for sample in samples:
+                row = {
+                    "model": sample.get("model_name", "Unknown"),
+                    "example_number": sample.get("example_number", 0),
+                    "task": sample.get("task", case),
+                    "timestamp": sample.get("timestamp", ""),
+                }
+
+                input_data = sample.get("input_data", {})
+                if case == "summarization":
+                    row["input_text"] = input_data.get("text", "")
+                    row["question"] = ""
+                elif case == "question_answering":
+                    row["input_text"] = input_data.get("text", input_data.get("context", ""))
+                    row["question"] = input_data.get("question", "")
+                elif case == "sarcasm":
+                    row["input_text"] = input_data.get("text", "")
+                    row["question"] = ""
+                else:
+                    row["input_text"] = str(input_data)
+                    row["question"] = ""
+
+                row["expected_output"] = sample.get("expected_output", "")
+                row["model_output"] = sample.get("llm_output", "")
+                row["match"] = bool(sample.get("match", False))
+                row["match_type"] = sample.get("match_type", "exact")
+                if sample.get("match_type") == "semantic":
+                    row["match_confidence"] = sample.get("match_confidence", 0.0)
+                    row["judge_explanation"] = sample.get("match_explanation", "")
+                else:
+                    row["match_confidence"] = None
+                    row["judge_explanation"] = ""
+
+                detailed_data.append(row)
+
+            # Deduplicate latest per (model, task, example_number)
+            if detailed_data:
+                deduped = {}
+                for row in detailed_data:
+                    key = (row.get("model"), row.get("task"), row.get("example_number"))
+                    deduped[key] = row
+                detailed_data = list(deduped.values())
+
+            # Sort by example_number, then model
+            detailed_data.sort(key=lambda x: (x.get("example_number", 0), str(x.get("model", ""))))
+            return detailed_data
+        except Exception as e:
+            print(f"Error loading recent samples: {e}")
+            return []
 
     def export_detailed_samples(
         self, log_dir: Path, case: str, n_samples: int = None
@@ -94,106 +191,47 @@ class ExcelExporter:
         Returns:
             Path to the exported Excel file with detailed samples
         """
-        import json
-        from collections import deque
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         detailed_path = self.excel_dir / f"{case}_detailed_samples_{timestamp}.xlsx"
 
-        # Read JSONL log file
-        jsonl_path = log_dir / f"{case}_logs.jsonl"
-
-        if not jsonl_path.exists():
-            print(f"Warning: Log file not found: {jsonl_path}")
-            return None
-
         try:
-            # Parse JSONL file with bounded memory.
-            all_count = 0
-            if n_samples is not None and n_samples > 0:
-                recent_samples = deque(maxlen=n_samples)
-            else:
-                recent_samples = []
-
-            with open(jsonl_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        sample = json.loads(line)
-                        all_count += 1
-                        if isinstance(recent_samples, deque):
-                            recent_samples.append(sample)
-                        else:
-                            recent_samples.append(sample)
-
-            if all_count == 0:
-                print(f"Warning: No samples found in {jsonl_path}")
+            samples_data = self.load_recent_samples(log_dir, case, n_samples)
+            if not samples_data:
+                print(f"Warning: No samples found for {case}")
                 return None
 
-            # Get only the current run samples (last n_samples entries)
-            if n_samples is not None and n_samples > 0:
-                samples = list(recent_samples)
-                print(
-                    f"✓ Exporting {len(samples)} samples from current run (out of {all_count} total)"
-                )
-            else:
-                samples = recent_samples
-                print(f"✓ Exporting all {len(samples)} samples")
+            excel_rows = []
+            for item in samples_data:
+                excel_rows.append({
+                    "Model": item.get("model", "Unknown"),
+                    "Example_Number": item.get("example_number", ""),
+                    "Task": item.get("task", ""),
+                    "Timestamp": item.get("timestamp", ""),
+                    "Input_Text": item.get("input_text", ""),
+                    "Question": item.get("question", ""),
+                    "Expected_Output": item.get("expected_output", ""),
+                    "Model_Output": item.get("model_output", ""),
+                    "Match": "Yes" if item.get("match") else "No",
+                    "Match_Type": item.get("match_type", "exact"),
+                    "Match_Confidence": (
+                        item.get("match_confidence")
+                        if item.get("match_confidence") is not None
+                        else "N/A"
+                    ),
+                    "Judge_Explanation": (
+                        item.get("judge_explanation")
+                        if item.get("judge_explanation")
+                        else ("N/A (Exact matching used)" if item.get("match_type") != "semantic" else "")
+                    ),
+                })
 
-            # Build detailed dataframe
-            detailed_data = []
-            for sample in samples:
-                row = {
-                    "Model": sample.get("model_name", "Unknown"),
-                    "Example_Number": sample.get("example_number", ""),
-                    "Task": sample.get("task", ""),
-                    "Timestamp": sample.get("timestamp", ""),
-                }
-
-                # Add input data (varies by task)
-                input_data = sample.get("input_data", {})
-                if case == "summarization":
-                    row["Input_Text"] = input_data.get("text", "")
-                elif case == "question_answering":
-                    row["Input_Text"] = input_data.get("text", input_data.get("context", ""))
-                    row["Question"] = input_data.get("question", "")
-                elif case == "sarcasm":
-                    row["Input_Text"] = input_data.get("text", "")
-
-                # Add expected output and model output
-                row["Expected_Output"] = sample.get("expected_output", "")
-                row["Model_Output"] = sample.get("llm_output", "")
-
-                # Add match information
-                row["Match"] = "Yes" if sample.get("match", False) else "No"
-                row["Match_Type"] = sample.get("match_type", "exact")
-
-                # Add LLM judge information (handle when semantic matching is disabled)
-                if sample.get("match_type") == "semantic":
-                    row["Match_Confidence"] = sample.get("match_confidence", 0.0)
-                    row["Judge_Explanation"] = sample.get("match_explanation", "")
-                else:
-                    row["Match_Confidence"] = "N/A"
-                    row["Judge_Explanation"] = "N/A (Exact matching used)"
-
-                detailed_data.append(row)
-
-            # Keep only the latest record per model/task/example when resumed runs append duplicates.
-            if detailed_data:
-                deduped = {}
-                for row in detailed_data:
-                    key = (row.get("Model"), row.get("Task"), row.get("Example_Number"))
-                    deduped[key] = row
-                detailed_data = list(deduped.values())
-
-            # Create DataFrame and sort by Model and Example_Number
-            df = pd.DataFrame(detailed_data)
-            
-            # Sort by Model (ascending) and then by Example_Number (ascending)
-            if not df.empty and 'Model' in df.columns and 'Example_Number' in df.columns:
-                df = df.sort_values(by=['Model', 'Example_Number'], ascending=[True, True])
-                print(f"✓ Sorted {len(df)} samples by Model and Example_Number")
-            
+            df = pd.DataFrame(excel_rows)
             df.to_excel(detailed_path, index=False)
+            try:
+                from benchmark_arabic_llms.reporting.excel_styler import style_existing_workbook
+                style_existing_workbook(detailed_path, task_name=case)
+            except Exception as style_err:
+                print(f"Notice: Detailed samples styling skipped: {style_err}")
             print(f"✓ Detailed samples exported: {detailed_path}")
             return detailed_path
 
@@ -461,6 +499,11 @@ class ExcelExporter:
             if comparison_data:
                 df = pd.DataFrame(comparison_data)
                 df.to_excel(comparison_path, index=False)
+                try:
+                    from benchmark_arabic_llms.reporting.excel_styler import style_existing_workbook
+                    style_existing_workbook(comparison_path, task_name=case, model_results=model_results)
+                except Exception as style_err:
+                    print(f"Notice: Model comparison styling skipped: {style_err}")
                 print(f"✓ Model comparison exported: {comparison_path}")
                 return comparison_path
             else:
