@@ -99,7 +99,7 @@ benchmarking-arabic-llms/
 │   └── unit/                             # Metrics, normalization, and task registry tests
 ├── reports/                              # Output directory for Excel, HTML, and JSON reports
 ├── logs/                                 # Runtime logs and detailed sample JSONL files
-├── pyproject.toml                        # Poetry project configuration & dependencies
+├── pyproject.toml                        # PEP 621 project configuration & dependencies (uv / pip / poetry)
 ├── start.py                              # Unified full-stack launch script
 └── README.md                             # Project documentation
 ```
@@ -136,7 +136,10 @@ benchmarking-arabic-llms/
 
 Ensure you have the following installed on your machine:
 - **Python:** `3.11` or higher (Python `3.12` / `3.13` / `3.14` supported; note: `3.14.1` has a known upstream bug, use `3.14.0` or `3.14.2+`).
-- **Poetry:** For Python dependency and virtual environment management ([Install Poetry](https://python-poetry.org/docs/#installation)).
+- **uv (Recommended):** Extremely fast Python package and project manager ([Install uv](https://docs.astral.sh/uv/getting-started/installation/)):
+  - **Windows (PowerShell):** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+  - **macOS / Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - *(Alternative: `pip install uv` or `pip install poetry`)*
 - **Node.js & npm:** Node.js `18.x` or higher and npm `9.x` or higher ([Download Node.js](https://nodejs.org/)).
 - **API Keys:**
   - **OpenRouter API Key:** From [openrouter.ai](https://openrouter.ai/) (required for OpenRouter models).
@@ -154,10 +157,13 @@ cd Benchmarking-Arabic-LLMs
 ```
 
 ### 2. Install Python Backend Dependencies
-Install all required Python dependencies into an isolated virtual environment via Poetry:
+
+Using **uv** (recommended):
 ```bash
-poetry install
+# Automatically creates .venv and syncs all dependencies + dev tools
+uv sync
 ```
+*(Alternatively, with Poetry: `poetry install`, or with standard pip: `pip install -e .`)*
 
 ### 3. Install Frontend Dependencies
 Navigate to the `frontend` directory and install the Node.js packages:
@@ -196,16 +202,19 @@ npm --prefix frontend run build
 ### 2. Run Backend Unit & Integration Tests
 Execute the comprehensive test suite (15 unit and integration tests covering normalization, tasks, metrics, and end-to-end pipelines):
 ```bash
-poetry run pytest -v
+# Using uv:
+uv run pytest -v
+
+# (Or using Poetry: poetry run pytest -v)
 ```
 
 To run specific test categories:
 ```bash
 # Unit tests only
-poetry run pytest tests/unit/ -v
+uv run pytest tests/unit/ -v
 
 # Integration tests only
-poetry run pytest tests/integration/ -v
+uv run pytest tests/integration/ -v
 ```
 
 ---
@@ -215,8 +224,10 @@ poetry run pytest tests/integration/ -v
 ### Option A: Unified Full-Stack Launch (Recommended)
 Launch both the **FastAPI backend** (port `8000`) and the **Vite React frontend** (port `5173`) with a single command:
 ```bash
-poetry run python start.py
+uv run python start.py
 ```
+*(Or `poetry run python start.py`, or simply `python start.py` with your virtualenv active)*
+
 - **Web Application:** Open [http://localhost:5173](http://localhost:5173) in your browser.
 - **FastAPI Documentation:** Open [http://localhost:8000/docs](http://localhost:8000/docs).
 - Press `Ctrl + C` in the terminal to gracefully terminate both servers.
@@ -227,9 +238,9 @@ poetry run python start.py
 
 #### Terminal 1 — FastAPI Backend:
 ```bash
-poetry run python src/benchmark_arabic_llms/main.py --mode api --port 8000
+uv run python src/benchmark_arabic_llms/main.py --mode api --port 8000
 ```
-*(Or directly with Uvicorn: `poetry run uvicorn benchmark_arabic_llms.api.main:app --host 0.0.0.0 --port 8000 --reload`)*
+*(Or directly with Uvicorn: `uv run uvicorn benchmark_arabic_llms.api.main:app --host 0.0.0.0 --port 8000 --reload`)*
 
 #### Terminal 2 — React Vite Frontend:
 ```bash
@@ -242,7 +253,7 @@ npm --prefix frontend run dev
 ### Option C: Legacy Streamlit UI
 If you need to access the legacy Streamlit interface:
 ```bash
-poetry run python src/benchmark_arabic_llms/main.py --mode ui
+uv run python src/benchmark_arabic_llms/main.py --mode ui
 ```
 The Streamlit app will start at [http://localhost:8501](http://localhost:8501).
 
@@ -282,7 +293,7 @@ The Streamlit app will start at [http://localhost:8501](http://localhost:8501).
 - **Q: Port 8000 or 5173 is already in use.**  
   *A:* You can customize the backend port by passing `--port <PORT>`:
   ```bash
-  poetry run python src/benchmark_arabic_llms/main.py --mode api --port 8080
+  uv run python src/benchmark_arabic_llms/main.py --mode api --port 8080
   ```
   And specify a custom port for Vite in `frontend/vite.config.ts`.
 

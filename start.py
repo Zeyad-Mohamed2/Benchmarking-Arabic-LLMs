@@ -30,11 +30,23 @@ def main():
     frontend_dir = os.path.join(root_dir, "frontend")
 
     print("🚀 Starting FastAPI backend on port 8000...")
-    # Use poetry run or current python interpreter
-    backend_cmd = (
-        ["poetry", "run", "python", "src/benchmark_arabic_llms/main.py", "--mode", "api", "--port", "8000"]
-    )
-    backend = subprocess.Popen(backend_cmd, cwd=root_dir, shell=True)
+    # Run backend with the current Python environment (works with uv, venv, and poetry)
+    env = os.environ.copy()
+    src_dir = os.path.join(root_dir, "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{env['PYTHONPATH']}"
+    else:
+        env["PYTHONPATH"] = src_dir
+
+    backend_cmd = [
+        sys.executable,
+        os.path.join(src_dir, "benchmark_arabic_llms", "main.py"),
+        "--mode",
+        "api",
+        "--port",
+        "8000",
+    ]
+    backend = subprocess.Popen(backend_cmd, cwd=root_dir, env=env)
 
     # Let the backend initialize
     time.sleep(2)
